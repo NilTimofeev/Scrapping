@@ -5,12 +5,17 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 import time
 from pymongo import MongoClient
+from selenium.webdriver.common.action_chains import ActionChains
+import datetime
 
 chrome_options = Options()
 chrome_options.add_argument("--start-maximized")
 
 
 class MailRuScrapper:
+
+    months = {'января': '01', 'февраля': '02', 'марта': '03', 'апреля': '04', 'мая': '05', 'июня': '06',
+              'июля': '07', 'августа': '08', 'сентября': '09', 'октября': '10', 'ноября': '11', 'декабря': '12'}
 
     def __init__(self):
 
@@ -21,6 +26,7 @@ class MailRuScrapper:
         self.letters_links = set()
         self.url = 'https://e.mail.ru/inbox/'
         self.client = MongoClient('localhost', 27017)
+        self.actions = ActionChains(self.driver)
 
     def make_letters_links(self):
 
@@ -48,7 +54,17 @@ class MailRuScrapper:
         self.driver.get(f'{self.url}{link}')
         theme = self.driver.find_elements(By.CLASS_NAME, 'thread-subject')[0].text
         address = self.driver.find_elements(By.CLASS_NAME, 'letter-contact')[0].get_attribute('title')
-        date = self.driver.find_elements(By.CLASS_NAME, 'letter__date')[0].text
+        date = self.driver.find_elements(By.CLASS_NAME, 'letter__date')[0].text.split()
+        d = datetime.datetime.now()
+        # Сегодня, 15:41  |  Вчера, 22:04  |  21 марта, 14:14  |  25 января 2021, 16:51
+        if date[0] == 'Сегодня,':
+            date = f'{d.strftime("%d-%m-%Y")} {date[1]}'
+        elif date[0] == 'Вчера,':
+            date = f'{(d - datetime.timedelta(days=1)).strftime("%d-%m-%Y")} {date[1]}'
+        elif len(date) == 3:
+            date = f'{date[0]}-{self.months[date[1][:-1]]}-{d.year} {date[2]}'
+        else:
+            date = f'{date[0]}-{self.months[date[1]]}-{date[2][:-1]} {date[3]}'
         text = self.driver.find_element(By.XPATH, "//div[@class='letter__body']").text
 
         doc = {'address': address, 'date': date, 'theme': theme, 'text': text}
